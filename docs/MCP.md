@@ -78,7 +78,7 @@ USB 로 쓸 거면 `ESCPOS_HOST` 대신 `"ESCPOS_TARGET": "usb"` 를 주거나,
 
 ```json
 { "usb": "usb://Printer/POS-80?serial=...", "network_host": "192.168.0.8",
-  "will_use": "USB", "paper_width_dots": 640,
+  "will_use": "USB", "paper_width_dots": 576,
   "korean_font": "/System/Library/Fonts/AppleSDGothicNeo.ttc" }
 ```
 

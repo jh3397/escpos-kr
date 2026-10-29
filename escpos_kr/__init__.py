@@ -1,6 +1,6 @@
 """escpos-kr — 한글이 되는 ESC/POS 영수증 프린터 라이브러리.
 
-POS-8390 (80mm, 640 dot) 으로 검증했고, 같은 ESC/POS 계열 영수증 프린터면
+POS-8390 (80mm, 인쇄 폭 576 dot) 으로 검증했고, 같은 ESC/POS 계열 프린터면
 대체로 그대로 쓸 수 있다. 용지 폭이 다르면 ESCPOS_WIDTH 로 바꾼다 (58mm=384).
 
     from escpos_kr import Printer

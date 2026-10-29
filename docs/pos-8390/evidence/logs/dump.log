@@ -1,0 +1,51 @@
+[1] 'MYPrint' 접속 시도
+    맥북 IP: 192.168.4.2 / 게이트웨이: 없음
+    >> 대역 변경 확인 — MYPrint 에 접속됨
+[2] 설정 페이지 주소 확인
+    >> 응답함: 192.168.4.1
+192.168.4.1
+[3] 1차 수집 (알려진 경로)
+    / -> (빈 응답)
+    /index.html -> (빈 응답)
+    /index.htm -> (빈 응답)
+    /wifi -> (빈 응답)
+    /wifi.htm -> (빈 응답)
+    /wifi.html -> (빈 응답)
+    /wlan -> (빈 응답)
+    /wlan.htm -> (빈 응답)
+    /sta -> (빈 응답)
+    /sta.htm -> (빈 응답)
+    /ap -> (빈 응답)
+    /ap.htm -> (빈 응답)
+    /net -> (빈 응답)
+    /net.htm -> (빈 응답)
+    /network -> (빈 응답)
+    /network.htm -> (빈 응답)
+    /config -> (빈 응답)
+    /config.htm -> (빈 응답)
+    /setting -> (빈 응답)
+    /settings -> (빈 응답)
+    /system -> (빈 응답)
+    /system.htm -> (빈 응답)
+    /ip_config.htm -> (빈 응답)
+    /scan -> (빈 응답)
+    /set -> (빈 응답)
+    /setwifi -> (빈 응답)
+    /wifisave -> (빈 응답)
+    /wifi_save -> (빈 응답)
+    /apply -> (빈 응답)
+    /save -> (빈 응답)
+    /status -> (빈 응답)
+    /info -> (빈 응답)
+    /menu.htm -> (빈 응답)
+    /main.htm -> (빈 응답)
+    /home.htm -> (빈 응답)
+    /style.css -> (빈 응답)
+    /index.js -> (빈 응답)
+[4] 2차 수집 (1차 결과에서 참조된 파일)
+    (참조 없음)
+[5] 완료 -> /Users/junhyunkim/projects/성만교회/ap_pages
+    dump.log
+[*] Wi-Fi 복구 중 (기억 목록에서 MYPrint 제거 후 전원 재투입)
+    복구됨: IP 192.168.0.10 / GW ? (2회 시도)
+    게이트웨이 응답 정상

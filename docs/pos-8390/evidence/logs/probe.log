@@ -1,0 +1,30 @@
+[1] 'MYPrint' 접속
+    맥북 IP: 192.168.4.2
+[2] 열린 포트 탐색
+    열린 포트: 없음
+[3] 요청 형식별 시험 (포트 80, 경로 /)
+    [http10_nohost] 0B
+    [http10_host] 0B
+    [http11_host] 0B
+    [simple] 0B
+    [simple_lf] 0B
+    [http10_ua] 0B
+[4] curl 시험
+    curl --http1.0
+        curl: (7) Failed to connect to 192.168.4.1 port 80 after 1101 ms: Couldn't connect to server
+        본문 0B / 헤더 0B
+    curl --http1.1
+        curl: (7) Failed to connect to 192.168.4.1 port 80 after 1007 ms: Couldn't connect to server
+        본문 0B / 헤더 0B
+[5] 완료
+    dump.log
+    probe.log
+    curl_hdr.txt
+    try_http10_host.raw
+    try_http10_nohost.raw
+    try_http10_ua.raw
+    try_http11_host.raw
+    try_simple.raw
+    try_simple_lf.raw
+[*] Wi-Fi 복구 중
+    복구됨: IP 192.168.0.10 (2회)

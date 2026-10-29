@@ -1,0 +1,195 @@
+"""영수증을 조립해서 한 번에 보내는 고수준 API.
+
+명령을 버퍼에 쌓아 두었다가 send() 에서 한 번에 내보낸다. 이 프린터의 Wi-Fi
+모듈은 동시 접속을 하나만 받으므로, 조각조각 보내는 것보다 모아 보내는 쪽이
+안전하고 빠르다.
+
+한글과 영문을 섞어 써도 된다. text() 가 줄마다 보고 ASCII 면 내장 폰트로,
+한글이 섞여 있으면 래스터로 알아서 처리한다.
+"""
+from __future__ import annotations
+
+from . import commands as cmd
+from . import config
+from . import raster as rs
+from .transport import Transport, is_transport, open_transport
+
+
+def _is_ascii(s: str) -> bool:
+    return all(32 <= ord(c) <= 126 for c in s)
+
+
+class Printer:
+    """사용 예::
+
+        with Printer() as p:                      # USB 우선, 없으면 네트워크
+            p.align("center").size(2, 2).text("가게 이름")
+            p.reset().line()
+            p.row("십일조", "50,000원")
+            p.cut()
+
+    with 블록을 빠져나갈 때 자동으로 전송한다.
+    """
+
+    def __init__(self, target: str | Transport | None = None,
+                 host: str | None = None,
+                 font_size: int = rs.DEFAULT_SIZE,
+                 font_path: str | None = None,
+                 width: int | None = None):
+        self._target = target
+        self._host = host
+        self._transport: Transport | None = (
+            target if is_transport(target) else None)
+        self.font_size = font_size
+        self.font_path = font_path          # None 이면 쓸 때 설정에서 찾는다
+        self.width = width or config.width()
+
+        self._buf = bytearray(cmd.INIT)
+        self._align = "left"
+        self._bold = False
+        self._w = 1
+        self._h = 1
+
+    # --- 상태 ---
+
+    def align(self, how: str) -> "Printer":
+        if how not in cmd.ALIGN:
+            raise ValueError("정렬은 left, center, right 중 하나여야 합니다")
+        self._align = how
+        self._buf += cmd.ALIGN[how]
+        return self
+
+    def bold(self, on: bool = True) -> "Printer":
+        self._bold = on
+        self._buf += cmd.BOLD_ON if on else cmd.BOLD_OFF
+        return self
+
+    def underline(self, on: bool = True) -> "Printer":
+        self._buf += cmd.UNDERLINE_ON if on else cmd.UNDERLINE_OFF
+        return self
+
+    def size(self, width: int = 1, height: int = 1) -> "Printer":
+        self._w, self._h = width, height
+        self._buf += cmd.size(width, height)
+        return self
+
+    def reset(self) -> "Printer":
+        """글자 꾸밈을 모두 되돌린다. 정렬은 그대로 둔다."""
+        self._bold = False
+        self._w = self._h = 1
+        self._buf += cmd.BOLD_OFF + cmd.UNDERLINE_OFF + cmd.RESET_SIZE
+        return self
+
+    # --- 내용 ---
+
+    @property
+    def chars_per_line(self) -> int:
+        """지금 글자 크기로 한 줄에 들어가는 ASCII 글자 수."""
+        return cmd.CHARS_PER_LINE // self._w
+
+    def text(self, s: str = "") -> "Printer":
+        """한 줄 또는 여러 줄. 한글이 섞이면 자동으로 래스터로 찍는다."""
+        lines = s.split("\n")
+        batch: list[str] = []
+
+        def flush_batch():
+            if batch:
+                self._buf += rs.render_lines(
+                    batch, font_size=self.font_size * self._h,
+                    bold=self._bold, align=self._align, width=self.width,
+                    font_path=self.font_path)
+                batch.clear()
+
+        for line in lines:
+            if _is_ascii(line):
+                flush_batch()
+                self._buf += line.encode("ascii") + b"\n"
+            else:
+                batch.append(line)
+        flush_batch()
+        return self
+
+    def line(self, char: str = "-") -> "Printer":
+        """구분선."""
+        self._buf += (char * self.chars_per_line).encode("ascii") + b"\n"
+        return self
+
+    def row(self, left: str, right: str, filler: str = " ") -> "Printer":
+        """'항목 ─ 금액' 한 줄. 왼쪽 끝과 오른쪽 끝에 붙인다."""
+        if _is_ascii(left) and _is_ascii(right):
+            gap = self.chars_per_line - len(left) - len(right)
+            if gap < 1:
+                gap = 1
+            self._buf += (left + filler * gap + right).encode("ascii") + b"\n"
+        else:
+            self._buf += rs.render_row(
+                left, right, font_size=self.font_size * self._h,
+                bold=self._bold, width=self.width, font_path=self.font_path)
+        return self
+
+    def qr(self, data: str, module: int = 6, ec: str = "M") -> "Printer":
+        """내장 QR 코드. 별도 라이브러리가 필요 없다."""
+        self._buf += cmd.qr(data, module, ec)
+        return self
+
+    def image(self, source, dither: bool = True) -> "Printer":
+        """사진·로고. 경로나 PIL 이미지를 받는다."""
+        self._buf += rs.render_image(source, width=self.width, dither=dither)
+        return self
+
+    def raw(self, data: bytes) -> "Printer":
+        """직접 만든 ESC/POS 바이트를 끼워 넣는다."""
+        self._buf += data
+        return self
+
+    # --- 마무리 ---
+
+    def feed(self, lines: int = 1) -> "Printer":
+        self._buf += cmd.feed(lines)
+        return self
+
+    def cut(self, feed: int = 4, partial: bool = False) -> "Printer":
+        """커팅. 칼날이 인쇄 위치보다 위에 있어 급지 없이 자르면 글자가 잘린다."""
+        if feed:
+            self._buf += cmd.feed(feed)
+        self._buf += cmd.CUT_PARTIAL if partial else cmd.CUT_FULL
+        return self
+
+    def beep(self) -> "Printer":
+        self._buf += cmd.BEEP
+        return self
+
+    def drawer(self) -> "Printer":
+        """금전함을 연다 (서랍이 연결된 경우)."""
+        self._buf += cmd.DRAWER
+        return self
+
+    # --- 전송 ---
+
+    @property
+    def transport(self) -> Transport:
+        if self._transport is None:
+            self._transport = open_transport(self._target, self._host)
+        return self._transport
+
+    def bytes(self) -> bytes:
+        """보낼 내용을 바이트로 돌려준다. 전송은 하지 않는다 (시험용)."""
+        return bytes(self._buf)
+
+    def send(self) -> "Printer":
+        """쌓인 내용을 보내고 버퍼를 비운다."""
+        if len(self._buf) > len(cmd.INIT):
+            self.transport.send(bytes(self._buf))
+        self._buf = bytearray(cmd.INIT)
+        return self
+
+    def __enter__(self) -> "Printer":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if exc_type is None:
+            self.send()
+        return False
+
+    def __len__(self) -> int:
+        return len(self._buf)

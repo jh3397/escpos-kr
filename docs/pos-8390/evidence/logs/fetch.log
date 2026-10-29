@@ -1,0 +1,17 @@
+[1] 'MYPrint' 를 기다립니다 (최대 3분). 지금 FEED 누른 채 전원을 넣어주세요.
+    붙었습니다: 192.168.4.2 (1회 시도)
+[2] 첫 요청 (curl, 포트 80)
+curl: (1) Received HTTP/0.9 when not allowed
+    :80/ -> 0B
+[2-1] 다른 포트 시도 (하나씩, 2초 간격)
+curl: (7) Failed to connect to 192.168.4.1 port 8080 after 1009 ms: Couldn't connect to server
+    :8080/ -> 0B
+curl: (7) Failed to connect to 192.168.4.1 port 81 after 1013 ms: Couldn't connect to server
+    :81/ -> 0B
+curl: (7) Failed to connect to 192.168.4.1 port 8000 after 1022 ms: Couldn't connect to server
+    :8000/ -> 0B
+[*] Wi-Fi 복구 중
+    복구됨: IP 192.168.4.2 (1회)
+curl: (7) Failed to connect to 192.168.4.1 port 8888 after 1013 ms: Couldn't connect to server
+    :8888/ -> 0B
+  >> 어느 포트에서도 응답이 없습니다.

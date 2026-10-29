@@ -1,0 +1,15 @@
+[0] 원래 네트워크: You are not associated with an AirPort network.
+[1] 'OLDAP-000000' 접속 시도 (암호 없음)
+Could not find network OLDAP-000000.
+[2] 맥북이 받은 IP: 192.168.0.10
+[3] 프린터 탐색
+    후보 실패 -> 대역 전체 스캔
+    9100 열림: 192.168.0.3
+[4] 테스트 출력 -> 192.168.0.3
+-> 192.168.0.3:9100 로 전송
+   (Pillow 미설치 — 한글 테스트 건너뜀: pip install pillow)
+완료
+[5] 완료. 프린터 IP = 192.168.0.3
+[*] 원래 Wi-Fi 복구 시도: You are not associated with an AirPort network.
+Could not find network You are not associated with an AirPort network..
+You are not associated with an AirPort network.

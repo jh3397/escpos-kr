@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "escpos-kr"
+version = "0.1.0"
+description = "한글이 되는 ESC/POS 영수증 프린터 라이브러리 (USB·네트워크·MCP)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pillow>=9"]
+
+[project.optional-dependencies]
+mcp = ["mcp>=2"]
+
+[project.scripts]
+escpos-kr-mcp = "escpos_kr.mcp_server:main"
+
+[tool.setuptools]
+packages = ["escpos_kr"]

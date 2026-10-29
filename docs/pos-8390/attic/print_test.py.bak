@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""POS-8390 (ESC/POS, 80mm / 640dot) 네트워크 프린트 테스트.
+
+사용법:
+    python3 print_test.py                 # 기본 IP로 테스트 출력
+    python3 print_test.py 192.168.10.110  # IP 지정
+의존성: 한글 출력에만 Pillow 필요 (pip install pillow)
+"""
+import socket
+import sys
+
+PRINTER_IP = "192.168.10.110"
+PORT = 9100
+WIDTH_DOTS = 640          # 80mm 용지 = 640 dot
+CHARS_PER_LINE = 48       # ASCII 기준 한 줄 글자 수
+
+# --- ESC/POS 명령 ---
+INIT        = b"\x1b@"
+ALIGN_LEFT  = b"\x1ba\x00"
+ALIGN_CENTER= b"\x1ba\x01"
+BOLD_ON     = b"\x1bE\x01"
+BOLD_OFF    = b"\x1bE\x00"
+BIG_ON      = b"\x1d!\x11"   # 가로·세로 2배
+BIG_OFF     = b"\x1d!\x00"
+FEED        = b"\n"
+CUT         = b"\x1dV\x00"   # 전체 커팅
+BEEP        = b"\x1bB\x02\x03"
+
+
+def send(data: bytes, ip: str = PRINTER_IP) -> None:
+    """9100 포트로 전송.
+
+    macOS Sequoia 의 '로컬 네트워크' 권한이 없는 파이썬은 LAN 접속이
+    EHOSTUNREACH 로 막힌다. 그럴 때는 이미 권한이 있는 nc 로 넘긴다.
+    """
+    try:
+        with socket.create_connection((ip, PORT), timeout=5) as s:
+            s.sendall(data)
+    except OSError:
+        import subprocess
+        r = subprocess.run(["nc", "-w", "10", ip, str(PORT)], input=data)
+        if r.returncode != 0:
+            raise
+
+
+def text_block() -> bytes:
+    """ASCII 전용 블록. 이 프린터 내장 폰트에 한글이 없어 영문/숫자만."""
+    out = [INIT, ALIGN_CENTER, BIG_ON, BOLD_ON, b"SEONGMAN CHURCH\n",
+           BOLD_OFF, BIG_OFF, b"-" * CHARS_PER_LINE + b"\n",
+           ALIGN_LEFT, b"Printer : POS-8390\n", b"Mode    : ESC/POS, 9100/TCP\n",
+           b"Width   : 640 dot (80mm)\n", b"-" * CHARS_PER_LINE + b"\n",
+           ALIGN_CENTER, b"TEST OK\n", FEED * 4, CUT]
+    return b"".join(out)
+
+
+def korean_block(lines, font_path="/System/Library/Fonts/AppleSDGothicNeo.ttc",
+                 font_size=28) -> bytes:
+    """한글은 내장 폰트가 없으므로 이미지(래스터)로 찍는다."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    font = ImageFont.truetype(font_path, font_size)
+    line_h = font_size + 10
+    img = Image.new("1", (WIDTH_DOTS, line_h * len(lines) + 20), 1)
+    draw = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        draw.text((10, 10 + i * line_h), line, font=font, fill=0)
+
+    # GS v 0 — 래스터 비트 이미지
+    w_bytes = (img.width + 7) // 8
+    img = img.resize((w_bytes * 8, img.height))
+    raw = bytearray()
+    px = img.load()
+    for y in range(img.height):
+        for xb in range(w_bytes):
+            byte = 0
+            for bit in range(8):
+                if px[xb * 8 + bit, y] == 0:      # 검은 점 = 1
+                    byte |= 0x80 >> bit
+            raw.append(byte)
+    header = (b"\x1dv0\x00"
+              + bytes([w_bytes & 0xff, w_bytes >> 8,
+                       img.height & 0xff, img.height >> 8]))
+    return INIT + header + bytes(raw) + FEED * 4 + CUT
+
+
+if __name__ == "__main__":
+    ip = sys.argv[1] if len(sys.argv) > 1 else PRINTER_IP
+    print(f"-> {ip}:{PORT} 로 전송")
+    send(text_block(), ip)
+    try:
+        send(korean_block(["성만교회 주보", "2026년 10월 29일", "한글 출력 테스트"]), ip)
+    except ImportError:
+        print("   (Pillow 미설치 — 한글 테스트 건너뜀: pip install pillow)")
+    print("완료")

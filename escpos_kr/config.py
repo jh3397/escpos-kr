@@ -7,7 +7,7 @@
     ESCPOS_HOST     네트워크 주소 (USB 가 없을 때 쓰인다)
     ESCPOS_PORT     기본 9100
     ESCPOS_FONT     한글 폰트 파일 경로
-    ESCPOS_WIDTH    용지 폭 (dot). 80mm=640, 58mm=384
+    ESCPOS_WIDTH    인쇄 폭 (dot). 80mm=576, 58mm=384. 헤드 전체 폭이 아니다
     ESCPOS_COLUMNS  한 줄 ASCII 글자 수. 비우면 용지 폭에서 계산한다
 """
 from __future__ import annotations
@@ -16,14 +16,17 @@ import os
 from pathlib import Path
 
 DEFAULT_PORT = 9100
-DEFAULT_WIDTH = 640          # 80mm. 58mm 프린터는 384
 
-# 한 줄 글자 수는 용지 폭을 글자 칸으로 나눠 추정하면 기종마다 어긋난다.
-# POS-8390 은 셀프테스트에 640 dot / 48자 라고 인쇄하는데, 640/48 은 13.3 이라
-# 표준 폰트 A(12dot)와 맞지 않는다. 그래서 표준 용지 두 가지를 그대로 적는다.
-# 그 밖의 기종은 ESCPOS_COLUMNS 로 지정한다.
-COLUMNS_80MM = 48            # 576 / 640 dot
-COLUMNS_58MM = 32            # 384 dot
+# 실제로 찍히는 폭(dot)이다. 헤드의 전체 점 수가 아니다.
+# POS-8390 셀프테스트는 640 dot 이라고 인쇄하지만 그건 헤드 전체이고,
+# 종이에 나오는 것은 576 dot 까지다 — 640 으로 그리면 오른쪽 64 dot 이
+# 잘려 우측 정렬한 글자와 이미지 끝이 날아간다 (실물로 확인).
+DEFAULT_WIDTH = 576          # 80mm. 58mm 프린터는 384
+
+# ESC/POS 내장 폰트 A 의 글자 칸 너비(dot). 글자 12 x 24 에 자간이 포함된 값이다.
+# 인쇄 폭을 이 값으로 나누면 한 줄 글자 수가 나온다 — 576/12 = 48,
+# 384/12 = 32 로 두 표준 용지 모두 떨어진다. 줄자를 찍어 48자를 확인했다.
+CHAR_WIDTH_DOTS = 12
 
 # 한글이 들어 있는 폰트를 운영체제별로 훑는다. 먼저 찾은 것을 쓴다.
 FONT_CANDIDATES = (
@@ -59,8 +62,8 @@ def width() -> int:
 
 
 def columns_for(paper_width: int) -> int:
-    """그 용지 폭에서 한 줄에 들어가는 ASCII 글자 수."""
-    return COLUMNS_80MM if paper_width >= 512 else COLUMNS_58MM
+    """그 인쇄 폭에서 한 줄에 들어가는 ASCII 글자 수."""
+    return max(1, paper_width // CHAR_WIDTH_DOTS)
 
 
 def columns() -> int:

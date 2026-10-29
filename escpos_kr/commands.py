@@ -1,10 +1,10 @@
 """ESC/POS 명령 바이트.
 
-POS-8390 기준. 용지폭 80mm = 640 dot, 내장 폰트 A 기준 48자/줄.
+POS-8390 기준. 80mm 용지의 인쇄 폭 576 dot, 내장 폰트 A 기준 48자/줄.
 내장 문자셋은 GB18030 / ASCII / BIG5 뿐이라 한글은 여기 없다 — raster.py 를 쓴다.
 """
 
-WIDTH_DOTS = 640
+WIDTH_DOTS = 576        # 인쇄되는 폭. 헤드는 640 이지만 576 까지만 찍힌다
 CHARS_PER_LINE = 48
 
 INIT = b"\x1b@"

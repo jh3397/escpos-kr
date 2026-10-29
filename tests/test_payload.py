@@ -298,6 +298,31 @@ def test_style_survives_send():
     assert cmd.BOLD_ON in sent[1]
 
 
+def test_width_and_columns_stay_consistent():
+    """둘이 어긋나면 우측 정렬한 글자가 종이 밖으로 나간다 (실물에서 겪었다)."""
+    assert cmd.WIDTH_DOTS == config.DEFAULT_WIDTH
+    assert config.columns_for(config.DEFAULT_WIDTH) == CHARS_PER_LINE
+    assert config.DEFAULT_WIDTH % config.CHAR_WIDTH_DOTS == 0
+
+
+def test_right_aligned_text_stays_inside_paper():
+    """우측 정렬 래스터의 마지막 점이 인쇄 폭 안에 있어야 한다."""
+    payload = rs.render_row("왼쪽", "오른쪽 끝", width=config.DEFAULT_WIDTH)
+    width_bytes = payload[4] + payload[5] * 256
+    assert width_bytes * 8 <= config.DEFAULT_WIDTH + 7
+
+    body = payload[8:]
+    rows = len(body) // width_bytes
+    last_col_used = 0
+    for r in range(rows):
+        row = body[r * width_bytes:(r + 1) * width_bytes]
+        for i in range(width_bytes - 1, -1, -1):
+            if row[i]:
+                last_col_used = max(last_col_used, i)
+                break
+    assert last_col_used * 8 < config.DEFAULT_WIDTH
+
+
 def test_mcp_tool_defaults_are_real_values():
     """Field(...) 를 기본값으로 두면 직접 호출 시 항상 dry_run 이 된다."""
     import inspect

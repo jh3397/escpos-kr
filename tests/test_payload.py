@@ -3,7 +3,10 @@
     .venv/bin/python -m pytest tests -q
     .venv/bin/python tests/test_payload.py      # pytest 없이도 실행된다
 """
+import os
+import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -12,7 +15,34 @@ from PIL import Image
 
 from escpos_kr import CHARS_PER_LINE, Printer
 from escpos_kr import commands as cmd
+from escpos_kr import config
 from escpos_kr import raster as rs
+from escpos_kr import transport as tr
+
+
+@contextmanager
+def env(**kw):
+    """환경변수를 잠깐 바꾼다."""
+    old = {k: os.environ.get(k) for k in kw}
+    try:
+        for k, v in kw.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        yield
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def _dots(payload):
+    """래스터 payload 에서 '찍는 점' 의 비율."""
+    body = payload[8:]
+    return sum(bin(b).count("1") for b in body) / (len(body) * 8)
 
 
 def test_size_encoding():
@@ -161,6 +191,121 @@ def test_cut_feeds_first():
     p = Printer("usb://dummy")
     p.cut()
     assert p.bytes().endswith(b"\x1bd\x04\x1dV\x00")
+
+
+# ---- 리뷰에서 나온 결함들의 회귀 검사 ----
+
+def test_escpos_target_is_honored():
+    """문서에 적힌 ESCPOS_TARGET 이 실제로 전송 경로를 바꿔야 한다."""
+    with env(ESCPOS_TARGET="192.0.2.99"):
+        t = tr.open_transport()
+    assert isinstance(t, tr.Network) and t.host == "192.0.2.99"
+
+
+def test_explicit_target_beats_env():
+    with env(ESCPOS_TARGET="192.0.2.99"):
+        t = tr.open_transport("usb://explicit")
+    assert isinstance(t, tr.USB) and t.uri == "usb://explicit"
+
+
+def test_missing_nc_keeps_original_cause():
+    """nc 가 없다고 해서 '연결 실패' 라는 진짜 원인이 가려지면 안 된다."""
+    real = subprocess.run
+
+    def fake(cmd_, *a, **k):
+        if cmd_ and cmd_[0] == "nc":
+            raise FileNotFoundError(2, "No such file or directory", "nc")
+        return real(cmd_, *a, **k)
+
+    subprocess.run = fake
+    try:
+        n = tr.Network("192.0.2.1", timeout=0.3)
+        try:
+            n.send(b"x")
+        except tr.TransportError as e:
+            assert "nc" in str(e)
+        except FileNotFoundError:
+            raise AssertionError("FileNotFoundError 가 그대로 올라왔다")
+        else:
+            raise AssertionError("실패해야 하는데 성공했다")
+    finally:
+        subprocess.run = real
+
+
+def test_transparent_image_is_not_all_black():
+    """투명 배경 로고가 용지를 새까맣게 채우면 안 된다."""
+    transparent = Image.new("RGBA", (64, 16), (0, 0, 0, 0))
+    assert _dots(rs.render_image(transparent)) == 0
+
+
+def test_transparent_image_keeps_its_content():
+    img = Image.new("RGBA", (64, 16), (0, 0, 0, 0))
+    for x in range(10, 20):
+        for y in range(4, 12):
+            img.putpixel((x, y), (0, 0, 0, 255))
+    assert 0 < _dots(rs.render_image(img, dither=False)) < 0.5
+
+
+def test_image_accepts_pathlib_path(tmpdir=None):
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / "logo.png"
+        Image.new("RGB", (32, 16), "white").save(f)
+        assert rs.render_image(f)            # AttributeError 가 나면 실패
+
+
+def test_columns_follow_paper_width():
+    """58mm(384dot) 에서 48자로 계산하면 구분선이 접힌다."""
+    with env(ESCPOS_WIDTH="384", ESCPOS_COLUMNS=None):
+        assert config.columns() == 32
+        p = Printer("usb://dummy")
+        assert p.chars_per_line == 32
+        before = len(p.bytes())
+        p.line()
+        assert len(p.bytes()[before:].rstrip(b"\n")) == 32
+
+
+def test_columns_can_be_overridden():
+    with env(ESCPOS_COLUMNS="42"):
+        assert Printer("usb://dummy").chars_per_line == 42
+
+
+def test_non_ascii_rule_does_not_raise():
+    """한국어 문서에서 흔한 괘선 문자도 받아야 한다."""
+    p = Printer("usb://dummy")
+    p.line("─")
+    assert b"\x1dv0" in p.bytes()
+
+
+def test_non_ascii_filler_falls_back_to_raster():
+    p = Printer("usb://dummy")
+    p.row("A", "B", filler="·")
+    assert b"\x1dv0" in p.bytes()
+
+
+def test_style_survives_send():
+    """INIT 이 프린터를 되돌리므로, 다음 전송에 꾸밈을 다시 적어야 한다."""
+    sent = []
+
+    class Fake:
+        def send(self, data):
+            sent.append(data)
+
+    p = Printer(Fake())
+    p.align("center").bold().text("A").send()
+    p.text("B").send()
+    assert cmd.ALIGN["center"] in sent[1]
+    assert cmd.BOLD_ON in sent[1]
+
+
+def test_mcp_tool_defaults_are_real_values():
+    """Field(...) 를 기본값으로 두면 직접 호출 시 항상 dry_run 이 된다."""
+    import inspect
+    from escpos_kr.mcp_server import print_receipt
+    params = inspect.signature(print_receipt).parameters
+    assert params["cut"].default is True
+    assert params["dry_run"].default is False
+    assert params["target"].default is None
 
 
 if __name__ == "__main__":

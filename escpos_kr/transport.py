@@ -109,8 +109,15 @@ class Network(Transport):
         except OSError as e:
             first = e
 
-        r = subprocess.run(["nc", "-w", "15", self.host, str(self.port)],
-                           input=data, capture_output=True)
+        try:
+            r = subprocess.run(["nc", "-w", "15", self.host, str(self.port)],
+                               input=data, capture_output=True)
+        except OSError as e:
+            # nc 가 없는 환경이 흔하다. 여기서 FileNotFoundError 를 그대로
+            # 올리면 '프린터 연결 실패' 라는 진짜 원인이 가려진다.
+            raise TransportError(
+                f"네트워크 전송 실패 ({self.host}:{self.port}) — "
+                f"소켓: {first}, nc 실행 불가: {e}") from first
         if r.returncode != 0:
             raise TransportError(
                 f"네트워크 전송 실패 ({self.host}:{self.port}) — "
@@ -154,6 +161,8 @@ def open_transport(target: str | Transport | None = None,
     """
     if is_transport(target):
         return target
+    if target is None:                      # 인자가 없을 때만 환경변수를 본다
+        target = config.target()
     if target is None or target == "auto":
         return auto(host)
     if target == "usb":

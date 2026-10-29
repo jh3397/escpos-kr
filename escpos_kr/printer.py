@@ -35,7 +35,8 @@ class Printer:
                  host: str | None = None,
                  font_size: int = rs.DEFAULT_SIZE,
                  font_path: str | None = None,
-                 width: int | None = None):
+                 width: int | None = None,
+                 columns: int | None = None):
         self._target = target
         self._host = host
         self._transport: Transport | None = (
@@ -43,10 +44,17 @@ class Printer:
         self.font_size = font_size
         self.font_path = font_path          # None 이면 쓸 때 설정에서 찾는다
         self.width = width or config.width()
+        if columns:
+            self.columns = columns
+        elif width:                         # 폭을 직접 줬으면 그 폭에서 센다
+            self.columns = config.columns_for(width)
+        else:
+            self.columns = config.columns()
 
         self._buf = bytearray(cmd.INIT)
         self._align = "left"
         self._bold = False
+        self._underline = False
         self._w = 1
         self._h = 1
 
@@ -65,6 +73,7 @@ class Printer:
         return self
 
     def underline(self, on: bool = True) -> "Printer":
+        self._underline = on
         self._buf += cmd.UNDERLINE_ON if on else cmd.UNDERLINE_OFF
         return self
 
@@ -76,6 +85,7 @@ class Printer:
     def reset(self) -> "Printer":
         """글자 꾸밈을 모두 되돌린다. 정렬은 그대로 둔다."""
         self._bold = False
+        self._underline = False
         self._w = self._h = 1
         self._buf += cmd.BOLD_OFF + cmd.UNDERLINE_OFF + cmd.RESET_SIZE
         return self
@@ -84,8 +94,12 @@ class Printer:
 
     @property
     def chars_per_line(self) -> int:
-        """지금 글자 크기로 한 줄에 들어가는 ASCII 글자 수."""
-        return cmd.CHARS_PER_LINE // self._w
+        """지금 글자 크기로 한 줄에 들어가는 ASCII 글자 수.
+
+        용지 폭에서 계산한다. 고정값을 쓰면 58mm(384dot) 프린터에서
+        구분선과 금액이 다음 줄로 접힌다.
+        """
+        return max(1, self.columns // self._w)
 
     def text(self, s: str = "") -> "Printer":
         """한 줄 또는 여러 줄. 한글이 섞이면 자동으로 래스터로 찍는다."""
@@ -110,13 +124,18 @@ class Printer:
         return self
 
     def line(self, char: str = "-") -> "Printer":
-        """구분선."""
-        self._buf += (char * self.chars_per_line).encode("ascii") + b"\n"
+        """구분선. `─` 같은 괘선 문자도 받는다 (내장 폰트에 없어 래스터로 그린다)."""
+        if _is_ascii(char):
+            self._buf += (char * self.chars_per_line).encode("ascii") + b"\n"
+        else:
+            self._buf += rs.render_rule(
+                char, font_size=self.font_size * self._h,
+                width=self.width, font_path=self.font_path)
         return self
 
     def row(self, left: str, right: str, filler: str = " ") -> "Printer":
         """'항목 ─ 금액' 한 줄. 왼쪽 끝과 오른쪽 끝에 붙인다."""
-        if _is_ascii(left) and _is_ascii(right):
+        if _is_ascii(left) and _is_ascii(right) and _is_ascii(filler):
             gap = self.chars_per_line - len(left) - len(right)
             if gap < 1:
                 gap = 1
@@ -176,11 +195,29 @@ class Printer:
         """보낼 내용을 바이트로 돌려준다. 전송은 하지 않는다 (시험용)."""
         return bytes(self._buf)
 
+    def _fresh_buffer(self) -> bytearray:
+        """INIT 뒤에 현재 꾸밈 상태를 다시 적어 둔 새 버퍼.
+
+        INIT 은 프린터의 정렬·굵기·배율을 모두 되돌린다. 객체의 상태만 남겨
+        두면 다음 전송에서 ASCII 는 초기 상태로, 한글 래스터는 객체 상태로
+        그려져 둘이 어긋난다.
+        """
+        buf = bytearray(cmd.INIT)
+        if self._align != "left":
+            buf += cmd.ALIGN[self._align]
+        if self._bold:
+            buf += cmd.BOLD_ON
+        if self._underline:
+            buf += cmd.UNDERLINE_ON
+        if (self._w, self._h) != (1, 1):
+            buf += cmd.size(self._w, self._h)
+        return buf
+
     def send(self) -> "Printer":
-        """쌓인 내용을 보내고 버퍼를 비운다."""
+        """쌓인 내용을 보내고 버퍼를 비운다. 꾸밈 상태는 이어진다."""
         if len(self._buf) > len(cmd.INIT):
             self.transport.send(bytes(self._buf))
-        self._buf = bytearray(cmd.INIT)
+        self._buf = self._fresh_buffer()
         return self
 
     def __enter__(self) -> "Printer":

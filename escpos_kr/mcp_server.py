@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
@@ -129,10 +129,13 @@ def list_printers() -> dict:
 )
 def print_receipt(
     blocks: list[Block],
-    cut: bool = Field(True, description="끝에 용지를 자른다"),
-    dry_run: bool = Field(False, description="실제로 찍지 않고 확인만"),
-    target: str | None = Field(
-        None, description="'usb' 또는 IP 주소. 생략하면 USB 우선, 없으면 설정값"),
+    # 기본값 자리에 Field(...) 를 쓰면 MCP 를 거치지 않고 파이썬에서 직접 부를 때
+    # 인자가 FieldInfo 객체가 된다. dry_run 이 항상 참이 되어 조용히 안 찍힌다.
+    # Annotated 로 감싸면 스키마 설명은 유지하면서 진짜 기본값을 갖는다.
+    cut: Annotated[bool, Field(description="끝에 용지를 자른다")] = True,
+    dry_run: Annotated[bool, Field(description="실제로 찍지 않고 확인만")] = False,
+    target: Annotated[str | None, Field(
+        description="'usb' 또는 IP 주소. 생략하면 USB 우선, 없으면 설정값")] = None,
 ) -> dict:
     if not blocks:
         raise ValueError("blocks 가 비어 있습니다")
@@ -162,7 +165,7 @@ def print_receipt(
 def print_text(
     text: str,
     align: Literal["left", "center", "right"] = "left",
-    size: int = Field(1, ge=1, le=4),
+    size: Annotated[int, Field(ge=1, le=4)] = 1,
     bold: bool = False,
     cut: bool = True,
     dry_run: bool = False,

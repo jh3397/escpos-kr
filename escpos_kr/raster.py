@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+import os
+
 from . import config
 from .commands import raster
 
@@ -101,11 +103,32 @@ def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
     return image_to_raster(img)
 
 
+def _flatten_alpha(img):
+    """투명 영역을 흰 바탕에 올린다.
+
+    이 과정을 빼고 바로 흑백으로 떨어뜨리면 투명한 곳이 검정(0)으로 읽혀,
+    반전 후 '찍을 점' 이 된다. 배경이 투명한 로고 하나가 용지를 새까맣게
+    채워 버린다.
+    """
+    Image, _, _ = _pillow()
+    if img.mode not in ("RGBA", "LA", "PA") and not (
+            img.mode == "P" and "transparency" in img.info):
+        return img
+    img = img.convert("RGBA")
+    bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    return Image.alpha_composite(bg, img)
+
+
 def render_image(source, width: int | None = None, dither: bool = True) -> bytes:
-    """사진이나 로고를 인쇄한다. 경로나 PIL 이미지를 받는다."""
+    """사진이나 로고를 인쇄한다. 경로(str/bytes/Path)나 PIL 이미지를 받는다."""
     Image, _, _ = _pillow()
     width = width or config.width()
-    img = Image.open(source) if isinstance(source, (str, bytes)) else source
+
+    if isinstance(source, (str, bytes, os.PathLike)):
+        with Image.open(source) as opened:
+            img = _flatten_alpha(opened.copy())
+    else:
+        img = _flatten_alpha(source)
 
     if img.width != width:
         height = max(1, round(img.height * width / img.width))
@@ -116,4 +139,22 @@ def render_image(source, width: int | None = None, dither: bool = True) -> bytes
     img = img.convert("L")
     img = img.point(lambda v: 255 - v)        # 검은 바탕 기준으로 뒤집는다
     img = img.convert("1", dither=Image.FLOYDSTEINBERG if dither else Image.NONE)
+    return image_to_raster(img)
+
+
+def render_rule(char: str, font_size: int = DEFAULT_SIZE,
+                width: int | None = None, font_path: str | None = None,
+                pad: int = 8) -> bytes:
+    """ASCII 가 아닌 문자로 구분선을 그린다 (─ 같은 괘선).
+
+    내장 폰트로는 보낼 수 없으므로, 폭에 맞는 개수를 재서 이미지로 그린다.
+    """
+    width = width or config.width()
+    font = load_font(font_size, font_path)
+    img, draw = _new_canvas(width, font_size + 10)
+
+    box = draw.textbbox((0, 0), char, font=font)
+    char_w = max(1, box[2] - box[0])
+    count = max(1, (width - pad * 2) // char_w)
+    draw.text((pad, 2), char * count, font=font, fill=1)
     return image_to_raster(img)

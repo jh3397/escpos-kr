@@ -41,9 +41,9 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 |---|---|
 | `text(s)` | 한 줄 또는 여러 줄(`\n`). 한글이면 자동 래스터 |
 | `row(left, right)` | 왼쪽 끝과 오른쪽 끝에 붙인다 |
-| `line(char)` | 구분선. 글자 크기에 맞춰 길이가 바뀐다 |
+| `line(char)` | 구분선. 용지 폭과 글자 크기에 맞춰 길이가 바뀐다. `─` 같은 괘선 문자도 된다 |
 | `qr(data)` | 내장 QR. 별도 라이브러리가 필요 없다 |
-| `image(path)` | 로고·사진. 선화는 `dither=False` 가 깨끗하다 |
+| `image(path)` | 로고·사진. 경로는 문자열이나 `Path`. 선화는 `dither=False` 가 깨끗하다. 투명 배경은 흰색으로 합성된다 |
 | `align` `bold` `underline` `size` `reset` | 꾸밈. 체이닝된다 |
 | `feed` `cut` `beep` `drawer` | 급지, 커팅, 부저, 금전함 |
 | `bytes()` | 보내지 않고 바이트만 — 시험용 |
@@ -61,10 +61,15 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 | `ESCPOS_HOST` | 없음 | 네트워크 주소 (USB 가 없을 때) |
 | `ESCPOS_PORT` | 9100 | |
 | `ESCPOS_WIDTH` | 640 | 용지 폭(dot). 80mm=640, **58mm=384** |
+| `ESCPOS_COLUMNS` | 폭에서 결정 | 한 줄 ASCII 글자 수. 80mm=48, 58mm=32 |
 | `ESCPOS_FONT` | 자동 탐색 | 한글 폰트 경로 |
 
 폰트는 macOS·Linux·Windows 의 흔한 한글 폰트를 차례로 찾는다.
 못 찾으면 어디를 뒤졌는지 알려주고 멈춘다.
+
+한 줄 글자 수는 용지 폭에서 정한다. 폭을 글자 칸으로 나눠 추정하면 기종마다
+어긋나므로(POS-8390 은 640 dot 에 48자로, 나누어떨어지지 않는다) 표준 용지
+두 가지를 그대로 쓴다. **구분선이 다음 줄로 접히면** `ESCPOS_COLUMNS` 를 줄인다.
 
 ## MCP
 

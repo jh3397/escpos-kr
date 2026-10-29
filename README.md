@@ -40,7 +40,7 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 | 메서드 | 하는 일 |
 |---|---|
 | `text(s)` | 한 줄 또는 여러 줄(`\n`). 한글이면 자동 래스터 |
-| `row(left, right)` | 왼쪽 끝과 오른쪽 끝에 붙인다 |
+| `row(left, right, filler)` | 왼쪽 끝과 오른쪽 끝에 붙인다. `filler='·'` 면 사이를 점선으로 채운다 |
 | `line(char)` | 구분선. 용지 폭과 글자 크기에 맞춰 길이가 바뀐다. `─` 같은 괘선 문자도 된다 |
 | `qr(data)` | 내장 QR. 별도 라이브러리가 필요 없다 |
 | `image(path)` | 로고·사진. 경로는 문자열이나 `Path`. 선화는 `dither=False` 가 깨끗하다. 투명 배경은 흰색으로 합성된다 |
@@ -61,7 +61,7 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 | `ESCPOS_HOST` | 없음 | 네트워크 주소 (USB 가 없을 때) |
 | `ESCPOS_PORT` | 9100 | |
 | `ESCPOS_WIDTH` | 576 | **인쇄** 폭(dot). 80mm=576, 58mm=384. 헤드 전체 폭이 아니다 |
-| `ESCPOS_COLUMNS` | 폭÷12 | 한 줄 ASCII 글자 수. 80mm=48, 58mm=32 |
+| `ESCPOS_COLUMNS` | 폭÷12 | 한 줄 ASCII 글자 수. 80mm=48, 58mm=32. 폭에서 유도한 값보다 우선한다 |
 | `ESCPOS_FONT` | 자동 탐색 | 한글 폰트 경로 |
 
 폰트는 macOS·Linux·Windows 의 흔한 한글 폰트를 차례로 찾는다.

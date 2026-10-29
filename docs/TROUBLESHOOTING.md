@@ -108,6 +108,9 @@ find_usb_devices()        # 후보 전부
 MCP 의 `list_printers` 도 후보가 둘 이상이면 함께 보여준다.
 원하는 장치를 `Printer("usb://...")` 로 직접 지정하거나 `ESCPOS_TARGET` 에 넣는다.
 
+판별할 때 `serial=` 부분은 떼고 본다. 시리얼은 임의 문자열이라
+모델명 패턴(`RP1`, `TM-9` 등)에 우연히 걸려 엉뚱한 프린터가 뽑힌 적이 있다.
+
 ## 쓰면 안 되는 것
 
 `route -host <IP> -interface <en>` 은 **쓰지 말 것.** 대상 IP 를 맥북 자신의

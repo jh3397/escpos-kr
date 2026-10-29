@@ -22,6 +22,9 @@ _RECEIPT_HINT = re.compile(
     r"\bPOS\b|\bPOS-\d|\bTM-\w*\d|\bSRP-\d|\bRP-?\d|thermal|receipt",
     re.I)
 _USB_URI = re.compile(r"(usb://\S+)")
+# 시리얼은 임의 문자열이라 모델명 패턴에 우연히 걸린다 (serial=RP12345 -> RP1).
+# 판별할 때는 떼고 본다.
+_SERIAL = re.compile(r"serial=[^\s\"]*", re.I)
 
 
 class TransportError(RuntimeError):
@@ -51,7 +54,7 @@ def find_usb_devices() -> list[str]:
     found = []
     for line in out.splitlines():
         m = _USB_URI.search(line)
-        if m and _RECEIPT_HINT.search(line):
+        if m and _RECEIPT_HINT.search(_SERIAL.sub("", line)):
             found.append(m.group(1).strip('"'))
     return found
 
@@ -127,6 +130,7 @@ class Network(Transport):
             # 아직 한 바이트도 안 나갔으니 nc 로 다시 보내도 안전하다.
             return self._send_via_nc(data, e)
 
+        failed = None
         with sock:
             sent = 0
             try:
@@ -143,7 +147,12 @@ class Network(Transport):
                         f"전송이 도중에 끊겼습니다 ({self.host}:{self.port}) — "
                         f"{sent}/{len(data)} 바이트 전송됨. 일부가 이미 인쇄되어 "
                         f"자동 재전송하지 않습니다: {e}") from e
-                return self._send_via_nc(data, e)
+                failed = e
+
+        # 폴백은 with 밖에서 — 이 프린터는 동시 접속을 하나만 받으므로
+        # 우리 소켓을 쥔 채로 nc 를 띄우면 nc 가 거부된다.
+        if failed is not None:
+            self._send_via_nc(data, failed)
 
     def _send_via_nc(self, data: bytes, first: OSError) -> None:
         """권한 있는 nc 로 넘긴다. 아직 아무것도 보내지 않았을 때만 부른다."""

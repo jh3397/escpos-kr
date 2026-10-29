@@ -66,16 +66,18 @@ def columns_for(paper_width: int) -> int:
     return max(1, paper_width // CHAR_WIDTH_DOTS)
 
 
-def columns() -> int:
+def columns(paper_width: int | None = None) -> int:
     """한 줄에 들어가는 ASCII 글자 수.
 
-    폰트 B 를 쓰거나 인쇄폭이 다른 기종은 ESCPOS_COLUMNS 로 지정한다 —
-    구분선이 다음 줄로 접히면 이 값이 큰 것이다.
+    paper_width 를 주면 그 폭에서 유도한다. 다만 ESCPOS_COLUMNS 가 있으면
+    그쪽이 이긴다 — 기종 보정으로 일부러 설정해 둔 값이기 때문이다.
+    폰트 B 를 쓰거나 인쇄폭이 다른 기종에서, 구분선이 다음 줄로 접히면
+    이 값이 큰 것이다.
     """
     raw = os.environ.get("ESCPOS_COLUMNS")
     if raw:
         return int(raw)
-    return columns_for(width())
+    return columns_for(width() if paper_width is None else paper_width)
 
 
 def font() -> str:

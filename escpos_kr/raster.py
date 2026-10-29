@@ -88,8 +88,12 @@ def render_lines(lines, font_size: int = DEFAULT_SIZE, bold: bool = False,
 
 def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
                bold: bool = False, width: int | None = None,
-               font_path: str | None = None, pad: int = 8) -> bytes:
-    """영수증의 '항목 ─ 금액' 한 줄. 왼쪽은 왼쪽 끝, 오른쪽은 오른쪽 끝."""
+               font_path: str | None = None, pad: int = 8,
+               filler: str = " ") -> bytes:
+    """영수증의 '항목 ─ 금액' 한 줄. 왼쪽은 왼쪽 끝, 오른쪽은 오른쪽 끝.
+
+    filler 가 공백이 아니면 둘 사이를 그 문자로 채운다 (점선 리더).
+    """
     width = width or config.width()
     font = load_font(font_size, font_path)
     stroke = 1 if bold else 0
@@ -97,9 +101,19 @@ def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
 
     draw.text((pad, 4), left, font=font, fill=1,
               stroke_width=stroke, stroke_fill=1)
-    box = draw.textbbox((0, 0), right, font=font, stroke_width=stroke)
-    draw.text((width - (box[2] - box[0]) - pad, 4), right, font=font, fill=1,
+    right_w = draw.textlength(right, font=font)
+    right_x = width - right_w - pad
+    draw.text((right_x, 4), right, font=font, fill=1,
               stroke_width=stroke, stroke_fill=1)
+
+    if filler.strip():                      # 공백이면 채울 것이 없다
+        gap_start = pad + draw.textlength(left, font=font) + font_size * 0.3
+        gap_end = right_x - font_size * 0.3
+        unit = draw.textlength(filler, font=font)
+        if unit > 0 and gap_end > gap_start:
+            count = int((gap_end - gap_start) // unit)
+            if count > 0:
+                draw.text((gap_start, 4), filler * count, font=font, fill=1)
     return image_to_raster(img)
 
 

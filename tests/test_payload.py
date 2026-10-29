@@ -436,6 +436,115 @@ def test_receipt_hint_ignores_words_containing_pos():
     assert not tr._RECEIPT_HINT.search('usb://C/E2000 "Canon Exposure 2000"')
 
 
+# ---- 2차 리뷰: 1차 수정이 만든 결함들 ----
+
+def test_serial_number_is_not_mistaken_for_a_receipt_printer():
+    """모델명 패턴이 시리얼에 우연히 걸리면 엉뚱한 프린터를 고른다."""
+    bad = [
+        'direct usb://Brother/HL-L2340D?serial=RP12345 "Brother HL-L2340D"',
+        'direct usb://HP/OfficeJet?serial=RP7 "HP OfficeJet 8012"',
+        'direct usb://Canon/MG3600?serial=TM-9 "Canon MG3600 series"',
+    ]
+    for line in bad:
+        assert not tr._RECEIPT_HINT.search(tr._SERIAL.sub("", line)), line
+
+    good = [
+        'direct usb://Printer/POS-80?serial=2468ACF01234 "Printer POS-80"',
+        'direct usb://Epson/TM-T88V?serial=X "EPSON TM-T88V"',
+    ]
+    for line in good:
+        assert tr._RECEIPT_HINT.search(tr._SERIAL.sub("", line)), line
+
+
+def test_nothing_is_sent_when_there_is_no_content():
+    """꾸밈 상태를 미리 적어 두므로 버퍼 길이로는 판별할 수 없다."""
+    sent = []
+
+    class Fake:
+        def send(self, data):
+            sent.append(data)
+
+    p = Printer(Fake())
+    p.align("center").bold()          # 꾸밈만 — 종이에 나갈 것이 없다
+    p.send()
+    assert sent == []
+
+    p.text("A").send()
+    assert len(sent) == 1
+    p.send()                          # 다시 불러도 보낼 것이 없다
+    assert len(sent) == 1
+
+
+def test_context_manager_does_not_resend_after_explicit_send():
+    sent = []
+
+    class Fake:
+        def send(self, data):
+            sent.append(data)
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    with Printer(Fake()) as p:
+        p.align("center").text("A").send()
+    assert len(sent) == 1
+
+
+def test_socket_is_closed_before_nc_fallback():
+    """이 프린터는 동시 접속을 하나만 받는다 — 소켓을 쥔 채 nc 를 띄우면 거부된다."""
+    state = {"closed": False, "open_at_nc": None}
+    real = subprocess.run
+
+    class Sock:
+        def send(self, b):
+            raise OSError("broken pipe")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            state["closed"] = True
+            return False
+
+    def fake_run(cmd_, *a, **k):
+        if cmd_ and cmd_[0] == "nc":
+            state["open_at_nc"] = not state["closed"]
+
+            class R:
+                returncode = 0
+            return R()
+        return real(cmd_, *a, **k)
+
+    real_conn = tr.socket.create_connection
+    tr.socket.create_connection = lambda *a, **k: Sock()
+    subprocess.run = fake_run
+    try:
+        tr.Network("192.0.2.1").send(b"x" * 10)
+        assert state["open_at_nc"] is False
+    finally:
+        tr.socket.create_connection = real_conn
+        subprocess.run = real
+
+
+def test_non_ascii_filler_is_actually_drawn():
+    """래스터 경로에서 filler 가 조용히 사라지면 안 된다."""
+    def dots(payload):
+        body = payload[8:]
+        return sum(bin(b).count("1") for b in body)
+
+    plain = rs.render_row("ITEM", "1,000", filler=" ")
+    leader = rs.render_row("ITEM", "1,000", filler="·")
+    assert dots(leader) > dots(plain)
+
+
+def test_env_columns_wins_over_width_derivation():
+    """기종 보정으로 설정해 둔 값이 폭에서 유도한 값에 지면 안 된다."""
+    with env(ESCPOS_COLUMNS="40"):
+        assert Printer("usb://dummy").chars_per_line == 40
+        assert Printer("usb://dummy", width=576).chars_per_line == 40
+        # 명시적 인자는 환경변수보다 세다
+        assert Printer("usb://dummy", columns=30).chars_per_line == 30
+
+
 def test_mcp_tool_defaults_are_real_values():
     """Field(...) 를 기본값으로 두면 직접 호출 시 항상 dry_run 이 된다."""
     import inspect

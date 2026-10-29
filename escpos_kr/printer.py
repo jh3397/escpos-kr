@@ -44,14 +44,12 @@ class Printer:
         self.font_size = font_size
         self.font_path = font_path          # None 이면 쓸 때 설정에서 찾는다
         self.width = width or config.width()
-        if columns:
-            self.columns = columns
-        elif width:                         # 폭을 직접 줬으면 그 폭에서 센다
-            self.columns = config.columns_for(width)
-        else:
-            self.columns = config.columns()
+        # 인자 > ESCPOS_COLUMNS > 폭에서 유도. 환경변수는 기종 보정으로
+        # 일부러 설정해 둔 값이라 폭에서 유도한 값보다 세야 한다.
+        self.columns = columns or config.columns(self.width)
 
         self._buf = bytearray(cmd.INIT)
+        self._dirty = False                 # 종이에 나갈 내용이 쌓였는가
         self._align = "left"
         self._bold = False
         self._underline = False
@@ -121,6 +119,7 @@ class Printer:
             else:
                 batch.append(line)
         flush_batch()
+        self._dirty = True
         return self
 
     def line(self, char: str = "-") -> "Printer":
@@ -131,6 +130,7 @@ class Printer:
             self._buf += rs.render_rule(
                 char, font_size=self.font_size * self._h,
                 width=self.width, font_path=self.font_path)
+        self._dirty = True
         return self
 
     def row(self, left: str, right: str, filler: str = " ") -> "Printer":
@@ -143,28 +143,34 @@ class Printer:
         else:
             self._buf += rs.render_row(
                 left, right, font_size=self.font_size * self._h,
-                bold=self._bold, width=self.width, font_path=self.font_path)
+                bold=self._bold, width=self.width, font_path=self.font_path,
+                filler=filler)
+        self._dirty = True
         return self
 
     def qr(self, data: str, module: int = 6, ec: str = "M") -> "Printer":
         """내장 QR 코드. 별도 라이브러리가 필요 없다."""
         self._buf += cmd.qr(data, module, ec)
+        self._dirty = True
         return self
 
     def image(self, source, dither: bool = True) -> "Printer":
         """사진·로고. 경로나 PIL 이미지를 받는다."""
         self._buf += rs.render_image(source, width=self.width, dither=dither)
+        self._dirty = True
         return self
 
     def raw(self, data: bytes) -> "Printer":
         """직접 만든 ESC/POS 바이트를 끼워 넣는다."""
         self._buf += data
+        self._dirty = True
         return self
 
     # --- 마무리 ---
 
     def feed(self, lines: int = 1) -> "Printer":
         self._buf += cmd.feed(lines)
+        self._dirty = True
         return self
 
     def cut(self, feed: int = 4, partial: bool = False) -> "Printer":
@@ -172,15 +178,18 @@ class Printer:
         if feed:
             self._buf += cmd.feed(feed)
         self._buf += cmd.CUT_PARTIAL if partial else cmd.CUT_FULL
+        self._dirty = True
         return self
 
     def beep(self) -> "Printer":
         self._buf += cmd.BEEP
+        self._dirty = True
         return self
 
     def drawer(self) -> "Printer":
         """금전함을 연다 (서랍이 연결된 경우)."""
         self._buf += cmd.DRAWER
+        self._dirty = True
         return self
 
     # --- 전송 ---
@@ -215,9 +224,13 @@ class Printer:
 
     def send(self) -> "Printer":
         """쌓인 내용을 보내고 버퍼를 비운다. 꾸밈 상태는 이어진다."""
-        if len(self._buf) > len(cmd.INIT):
+        # 꾸밈 상태를 미리 적어 두므로 버퍼 길이로는 '보낼 것이 있는지' 를
+        # 알 수 없다. 종이에 나갈 내용이 쌓였을 때만 보낸다 — 아니면 빈
+        # 전송이 생기고, 동시 접속을 하나만 받는 프린터에 연결만 낭비된다.
+        if self._dirty:
             self.transport.send(bytes(self._buf))
         self._buf = self._fresh_buffer()
+        self._dirty = False
         return self
 
     def __enter__(self) -> "Printer":

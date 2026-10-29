@@ -109,10 +109,10 @@ def test_mixed_lines_split_correctly():
     assert out.count(b"\x1dv0") == 1
 
 
-def _row_body(p, left, right):
+def _row_body(p, left, right, filler=" "):
     """row() 가 더한 바이트만 떼어 낸다 (앞선 상태 명령은 빼고)."""
     before = len(p.bytes())
-    p.row(left, right)
+    p.row(left, right, filler)
     return p.bytes()[before:].rstrip(b"\n")
 
 
@@ -543,6 +543,30 @@ def test_env_columns_wins_over_width_derivation():
         assert Printer("usb://dummy", width=576).chars_per_line == 40
         # 명시적 인자는 환경변수보다 세다
         assert Printer("usb://dummy", columns=30).chars_per_line == 30
+
+
+def test_row_filler_never_breaks_line_width():
+    """빈 filler 는 정렬을 없애고, 여러 글자짜리는 줄을 넘겼다."""
+    for filler in ("", " ", ".", "..", "----"):
+        body = _row_body(Printer("usb://dummy"), "ITEM", "1,000", filler)
+        assert len(body) == CHARS_PER_LINE, (filler, len(body))
+        assert body.startswith(b"ITEM") and body.endswith(b"1,000")
+
+
+def test_non_ascii_filler_uses_raster_not_text():
+    """'···' 같은 문자는 내장 폰트에 없으므로 래스터로 가야 한다."""
+    body = _row_body(Printer("usb://dummy"), "ITEM", "1,000", "···")
+    assert body.startswith(b"\x1dv0")
+
+
+def test_mcp_block_exposes_filler():
+    """라이브러리에만 넣고 MCP 에 안 넣으면 에이전트는 쓸 수 없다."""
+    from escpos_kr.mcp_server import Block, _compose
+    assert "filler" in Block.model_fields
+
+    p = Printer("usb://dummy")
+    _compose(p, [Block(type="row", left="ITEM", right="1,000", filler=".")])
+    assert b"." * 10 in p.bytes()
 
 
 def test_mcp_tool_defaults_are_real_values():

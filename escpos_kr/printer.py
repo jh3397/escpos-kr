@@ -134,12 +134,18 @@ class Printer:
         return self
 
     def row(self, left: str, right: str, filler: str = " ") -> "Printer":
-        """'항목 ─ 금액' 한 줄. 왼쪽 끝과 오른쪽 끝에 붙인다."""
+        """'항목 ─ 금액' 한 줄. 왼쪽 끝과 오른쪽 끝에 붙인다.
+
+        filler 가 공백이 아니면 사이를 그 문자로 채운다 (점선 리더).
+        """
+        filler = filler or " "              # 빈 문자열이면 채울 수 없다
         if _is_ascii(left) and _is_ascii(right) and _is_ascii(filler):
             gap = self.chars_per_line - len(left) - len(right)
             if gap < 1:
                 gap = 1
-            self._buf += (left + filler * gap + right).encode("ascii") + b"\n"
+            # 여러 글자짜리 filler 는 그대로 곱하면 줄을 넘긴다. 칸 수에 맞춰 자른다.
+            middle = (filler * gap)[:gap]
+            self._buf += (left + middle + right).encode("ascii") + b"\n"
         else:
             self._buf += rs.render_row(
                 left, right, font_size=self.font_size * self._h,

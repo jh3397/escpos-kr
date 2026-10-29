@@ -90,8 +90,8 @@ USB 로 쓸 거면 `ESCPOS_HOST` 대신 `"ESCPOS_TARGET": "usb"` 를 주거나,
   "blocks": [
     {"type": "text", "text": "가게 이름", "align": "center", "size": 2, "bold": true},
     {"type": "line", "char": "="},
-    {"type": "row", "left": "아메리카노", "right": "4,500원"},
-    {"type": "row", "left": "카페라떼",   "right": "5,000원"},
+    {"type": "row", "left": "아메리카노", "right": "4,500원", "filler": "."},
+    {"type": "row", "left": "카페라떼",   "right": "5,000원", "filler": "."},
     {"type": "line"},
     {"type": "row", "left": "합계", "right": "9,500원"},
     {"type": "qr", "data": "https://example.com/receipt/1234"}
@@ -102,7 +102,7 @@ USB 로 쓸 거면 `ESCPOS_HOST` 대신 `"ESCPOS_TARGET": "usb"` 를 주거나,
 | `type` | 쓰는 필드 | 하는 일 |
 |---|---|---|
 | `text` | `text` | 한 줄 글 (`\n` 으로 여러 줄) |
-| `row` | `left`, `right` | 왼쪽 끝과 오른쪽 끝에 붙인다 |
+| `row` | `left`, `right`, `filler` | 왼쪽 끝과 오른쪽 끝에 붙인다. `filler: "."` 면 사이를 점선으로 채운다 |
 | `line` | `char` | 구분선 |
 | `qr` | `data`, `module` | QR 코드 |
 | `feed` | `lines` | 빈 줄 |

@@ -53,6 +53,10 @@ class Block(BaseModel):
     data: str = Field("", description="type=qr 에 넣을 문자열")
     path: str = Field("", description="type=image 의 파일 경로")
     char: str = Field("-", description="type=line 에 쓸 문자")
+    filler: str = Field(
+        " ", min_length=1, max_length=4,
+        description="type=row 에서 항목과 금액 사이를 채울 문자. "
+                    "'·' 이나 '.' 을 주면 점선 리더가 된다. 기본은 공백")
     lines: int = Field(1, ge=1, le=20, description="type=feed 의 빈 줄 수")
     align: Literal["left", "center", "right"] | None = Field(
         None, description="정렬. 지정하면 이후 블록에도 이어진다")
@@ -74,7 +78,7 @@ def _compose(p: Printer, blocks: list[Block]) -> None:
         if b.type == "text":
             p.text(b.text)
         elif b.type == "row":
-            p.row(b.left, b.right)
+            p.row(b.left, b.right, filler=b.filler)
         elif b.type == "line":
             p.line(b.char or "-")
         elif b.type == "qr":

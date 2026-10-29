@@ -449,7 +449,7 @@ def test_serial_number_is_not_mistaken_for_a_receipt_printer():
         assert not tr._RECEIPT_HINT.search(tr._SERIAL.sub("", line)), line
 
     good = [
-        'direct usb://Printer/POS-80?serial=2468ACF01234 "Printer POS-80"',
+        'direct usb://Printer/POS-80?serial=XXXXXXXXXXXX "Printer POS-80"',
         'direct usb://Epson/TM-T88V?serial=X "EPSON TM-T88V"',
     ]
     for line in good:

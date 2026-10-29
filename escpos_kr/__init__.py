@@ -17,12 +17,14 @@ POS-8390 (80mm, 인쇄 폭 576 dot) 으로 검증했고, 같은 ESC/POS 계열 �
 from .commands import CHARS_PER_LINE, WIDTH_DOTS
 from .printer import Printer
 from .transport import (Network, Transport, TransportError, USB, auto,
-                        find_usb, is_transport, open_transport)
+                        find_usb, find_usb_devices, is_transport,
+                        open_transport)
 
 __version__ = "0.1.0"
 __all__ = [
     "Printer",
     "Transport", "USB", "Network", "TransportError",
-    "auto", "find_usb", "is_transport", "open_transport",
+    "auto", "find_usb", "find_usb_devices", "is_transport",
+    "open_transport",
     "WIDTH_DOTS", "CHARS_PER_LINE",
 ]

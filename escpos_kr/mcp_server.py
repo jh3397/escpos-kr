@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .printer import Printer
-from .transport import TransportError, find_usb
+from .transport import TransportError, find_usb_devices
 
 try:                                    # 설치본에서 버전을 읽는다
     from . import __version__
@@ -105,19 +105,26 @@ def _summary(data: bytes) -> dict:
     description="연결된 프린터와 현재 설정을 확인한다. 출력하기 전에 먼저 본다.",
 )
 def list_printers() -> dict:
-    usb = find_usb()
+    devices = find_usb_devices()
+    usb = devices[0] if devices else None
     host = config.host()
     try:
         font = config.font()
     except RuntimeError as e:
         font = f"없음 ({e.args[0].splitlines()[0]})"
-    return {
+    out = {
         "usb": usb or "없음",
         "network_host": host or "없음 (ESCPOS_HOST 미설정)",
         "will_use": "USB" if usb else (host or "사용 가능한 프린터 없음"),
         "paper_width_dots": config.width(),
         "korean_font": font,
     }
+    if len(devices) > 1:
+        # 여러 대가 걸리면 어느 것을 쓰는지 드러내 준다.
+        out["usb_candidates"] = devices
+        out["note"] = ("영수증 프린터로 보이는 USB 장치가 여러 대입니다. "
+                       "첫 번째를 씁니다 — 다르면 target 으로 지정하세요.")
+    return out
 
 
 @server.tool(

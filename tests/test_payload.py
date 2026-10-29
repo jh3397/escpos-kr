@@ -323,6 +323,119 @@ def test_right_aligned_text_stays_inside_paper():
     assert last_col_used * 8 < config.DEFAULT_WIDTH
 
 
+def test_partial_send_is_not_retried():
+    """일부가 이미 인쇄됐는데 nc 로 전체를 다시 보내면 영수증이 두 장 나온다."""
+    nc_calls = []
+    real = subprocess.run
+
+    def fake_run(cmd_, *a, **k):
+        if cmd_ and cmd_[0] == "nc":
+            nc_calls.append(cmd_)
+
+            class R:
+                returncode = 0
+            return R()
+        return real(cmd_, *a, **k)
+
+    class HalfDeadSocket:
+        def __init__(self):
+            self.sent = 0
+
+        def send(self, chunk):
+            if self.sent:                      # 두 번째 호출에서 끊긴다
+                raise OSError("connection reset")
+            self.sent = 10
+            return 10
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    real_conn = tr.socket.create_connection
+    tr.socket.create_connection = lambda *a, **k: HalfDeadSocket()
+    subprocess.run = fake_run
+    try:
+        try:
+            tr.Network("192.0.2.1").send(b"x" * 100)
+        except tr.TransportError as e:
+            assert "도중에 끊" in str(e) and "10/100" in str(e)
+        else:
+            raise AssertionError("실패해야 하는데 성공했다")
+        assert nc_calls == [], "부분 전송 후 nc 로 재전송했다"
+    finally:
+        tr.socket.create_connection = real_conn
+        subprocess.run = real
+
+
+def test_connect_failure_still_falls_back_to_nc():
+    """연결 자체가 막힌 경우(로컬 네트워크 권한)는 재전송이 안전하다."""
+    nc_calls = []
+    real = subprocess.run
+
+    def fake_run(cmd_, *a, **k):
+        if cmd_ and cmd_[0] == "nc":
+            nc_calls.append(cmd_)
+
+            class R:
+                returncode = 0
+            return R()
+        return real(cmd_, *a, **k)
+
+    real_conn = tr.socket.create_connection
+
+    def refuse(*a, **k):
+        raise OSError(65, "No route to host")
+
+    tr.socket.create_connection = refuse
+    subprocess.run = fake_run
+    try:
+        tr.Network("192.0.2.1").send(b"hello")
+        assert len(nc_calls) == 1
+    finally:
+        tr.socket.create_connection = real_conn
+        subprocess.run = real
+
+
+def test_usb_temp_file_is_cleaned_up_on_failure():
+    """백엔드가 실패해도 임시파일이 남으면 안 된다."""
+    import glob
+    import tempfile as tf
+
+    real = subprocess.run
+
+    def failing(cmd_, *a, **k):
+        class R:
+            returncode = 1
+            stderr = "boom"
+        return R()
+
+    subprocess.run = failing
+    try:
+        before = set(glob.glob(str(Path(tf.gettempdir()) / "*.escpos")))
+        u = tr.USB("usb://dummy")
+        try:
+            u.send(b"data")
+        except tr.TransportError:
+            pass
+        else:
+            raise AssertionError("실패해야 한다")
+        after = set(glob.glob(str(Path(tf.gettempdir()) / "*.escpos")))
+        assert after == before
+    finally:
+        subprocess.run = real
+
+
+def test_receipt_hint_ignores_words_containing_pos():
+    """'composite' 같은 단어에 걸려 엉뚱한 프린터를 고르면 안 된다."""
+    assert tr._RECEIPT_HINT.search('usb://Printer/POS-80 "Printer POS-80"')
+    assert tr._RECEIPT_HINT.search('usb://Epson/TM-T88V "EPSON TM-T88V"')
+    assert tr._RECEIPT_HINT.search('usb://X/Y "Generic Thermal Receipt"')
+    assert not tr._RECEIPT_HINT.search('usb://HP/DeskJet "HP Composite Device"')
+    assert not tr._RECEIPT_HINT.search('usb://C/E2000 "Canon Exposure 2000"')
+
+
 def test_mcp_tool_defaults_are_real_values():
     """Field(...) 를 기본값으로 두면 직접 호출 시 항상 dry_run 이 된다."""
     import inspect

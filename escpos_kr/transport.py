@@ -15,8 +15,12 @@ from . import config
 
 USB_BACKEND = "/usr/libexec/cups/backend/usb"
 
-# 어떤 USB 장치가 영수증 프린터인지 가려내는 표시
-_RECEIPT_HINT = re.compile(r"POS|TM-|thermal|receipt", re.I)
+# 어떤 USB 장치가 영수증 프린터인지 가려내는 표시.
+# 단어 경계를 두지 않으면 'composite', 'exposure' 처럼 pos 를 품은 흔한 단어에
+# 걸려 엉뚱한 프린터를 고른다 — 잉크젯에 ESC/POS 바이트가 그대로 들어간다.
+_RECEIPT_HINT = re.compile(
+    r"\bPOS\b|\bPOS-\d|\bTM-\w*\d|\bSRP-\d|\bRP-?\d|thermal|receipt",
+    re.I)
 _USB_URI = re.compile(r"(usb://\S+)")
 
 
@@ -37,18 +41,29 @@ class Transport:
         return False
 
 
-def find_usb() -> str | None:
-    """USB 로 붙은 영수증 프린터의 CUPS 장치 URI. 없으면 None."""
+def find_usb_devices() -> list[str]:
+    """USB 로 붙은 영수증 프린터로 보이는 장치 URI 들."""
     try:
         out = subprocess.run([USB_BACKEND], capture_output=True, text=True,
                              timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
-        return None
+        return []
+    found = []
     for line in out.splitlines():
         m = _USB_URI.search(line)
         if m and _RECEIPT_HINT.search(line):
-            return m.group(1).strip('"')
-    return None
+            found.append(m.group(1).strip('"'))
+    return found
+
+
+def find_usb() -> str | None:
+    """USB 로 붙은 영수증 프린터의 CUPS 장치 URI. 없으면 None.
+
+    여러 대가 걸리면 첫 번째를 쓴다. 어느 것이 걸렸는지는
+    find_usb_devices() 로 확인한다 (MCP 의 list_printers 가 함께 보여준다).
+    """
+    devices = find_usb_devices()
+    return devices[0] if devices else None
 
 
 class USB(Transport):
@@ -67,8 +82,11 @@ class USB(Transport):
     def send(self, data: bytes) -> None:
         fd, path = tempfile.mkstemp(suffix=".escpos")
         try:
-            os.write(fd, data)
-            os.close(fd)
+            # os.write 를 직접 쓰면 예외가 날 때 기술자가 남고, 반환값을
+            # 확인하지 않아 부분 쓰기가 조용히 영수증을 자른다.
+            # fdopen 은 예외가 나도 기술자를 닫고, write 는 전량을 보장한다.
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
             env = dict(os.environ, DEVICE_URI=self.uri)
             r = subprocess.run(
                 [USB_BACKEND, "1", os.environ.get("USER", "escpos"),
@@ -102,13 +120,33 @@ class Network(Transport):
 
     def send(self, data: bytes) -> None:
         try:
-            with socket.create_connection((self.host, self.port),
-                                          timeout=self.timeout) as s:
-                s.sendall(data)
-            return
+            sock = socket.create_connection((self.host, self.port),
+                                            timeout=self.timeout)
         except OSError as e:
-            first = e
+            # 연결 자체가 막힌 경우다. 로컬 네트워크 권한 문제가 여기 걸린다.
+            # 아직 한 바이트도 안 나갔으니 nc 로 다시 보내도 안전하다.
+            return self._send_via_nc(data, e)
 
+        with sock:
+            sent = 0
+            try:
+                while sent < len(data):
+                    n = sock.send(data[sent:])
+                    if n == 0:
+                        raise OSError("소켓이 더 이상 받지 않습니다")
+                    sent += n
+            except OSError as e:
+                if sent:
+                    # 일부가 이미 인쇄되었다. nc 로 전체를 다시 보내면
+                    # 잘린 영수증 뒤에 온전한 영수증이 또 나온다.
+                    raise TransportError(
+                        f"전송이 도중에 끊겼습니다 ({self.host}:{self.port}) — "
+                        f"{sent}/{len(data)} 바이트 전송됨. 일부가 이미 인쇄되어 "
+                        f"자동 재전송하지 않습니다: {e}") from e
+                return self._send_via_nc(data, e)
+
+    def _send_via_nc(self, data: bytes, first: OSError) -> None:
+        """권한 있는 nc 로 넘긴다. 아직 아무것도 보내지 않았을 때만 부른다."""
         try:
             r = subprocess.run(["nc", "-w", "15", self.host, str(self.port)],
                                input=data, capture_output=True)

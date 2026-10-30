@@ -52,6 +52,11 @@ class Block(BaseModel):
     right: str = Field("", description="type=row 의 오른쪽 (금액 등)")
     data: str = Field("", description="type=qr 에 넣을 문자열")
     path: str = Field("", description="type=image 의 파일 경로")
+    dither: bool = Field(
+        True,
+        description="type=image 의 농담 표현. 사진은 True(기본), "
+                    "로고·선화는 False 가 깨끗하다 — True 면 또렷한 면이 "
+                    "얼룩진다")
     char: str = Field("-", description="type=line 에 쓸 문자")
     filler: str = Field(
         " ", min_length=1, max_length=4,
@@ -90,7 +95,7 @@ def _compose(p: Printer, blocks: list[Block]) -> None:
         elif b.type == "image":
             if not b.path:
                 raise ValueError("type=image 에는 path 가 필요합니다")
-            p.image(b.path)
+            p.image(b.path, dither=b.dither)
 
         if styled:
             p.reset()

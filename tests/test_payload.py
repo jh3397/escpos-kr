@@ -572,6 +572,13 @@ def test_non_ascii_filler_uses_raster_not_text():
     assert body.startswith(b"\x1dv0")
 
 
+def test_mcp_block_exposes_dither():
+    """로고를 깨끗하게 찍으려면 에이전트가 디더링을 끌 수 있어야 한다."""
+    from escpos_kr.mcp_server import Block
+    assert Block(type="image", path="x.png").dither is True
+    assert Block(type="image", path="x.png", dither=False).dither is False
+
+
 def test_mcp_block_exposes_filler():
     """라이브러리에만 넣고 MCP 에 안 넣으면 에이전트는 쓸 수 없다."""
     from escpos_kr.mcp_server import Block, _compose

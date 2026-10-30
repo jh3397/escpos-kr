@@ -91,5 +91,6 @@ python examples/receipt.py --dry-run    # 찍지 않고 결과만
 
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — 안 찍힐 때 확인할 것
 - [docs/MCP.md](docs/MCP.md) — MCP 서버 등록과 도구
+- [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) — 다른 에이전트에 붙일 때 그대로 건네는 안내문
 - [docs/pos-8390/](docs/pos-8390/) — POS-8390 전용. 무선 설정 절차와
   설정 페이지 도구, 성만교회 설치 당시의 진단 기록

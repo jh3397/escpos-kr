@@ -70,6 +70,31 @@ USB 로 쓸 거면 `ESCPOS_HOST` 대신 `"ESCPOS_TARGET": "usb"` 를 주거나,
   `uv` 나 `npx` 로 띄우는 서버들이 PATH 때문에 연결에 실패하는 일이 흔한데,
   이 서버는 그 문제가 없다.
 
+## 에이전트가 서버를 못 찾을 때
+
+**등록은 클라이언트마다 따로다.** Claude Code 에 등록해도 Claude Desktop,
+Cursor 등은 보지 못한다. 설정 파일이 서로 다르기 때문이다.
+
+| 클라이언트 | 설정 위치 |
+|---|---|
+| Claude Code | `~/.claude.json` 의 최상위 `mcpServers` (`claude mcp add-json -s user`) |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| 그 밖 | 각자의 MCP 설정 파일 |
+
+순서대로 확인한다.
+
+1. **그 클라이언트에 등록되어 있나** — 위 표의 파일에 `escpos-kr` 항목이 있는지 본다.
+   없으면 아래 JSON 을 넣는다.
+2. **클라이언트를 다시 시작했나** — 등록해도 이미 떠 있는 세션에는 붙지 않는다.
+3. **나스가 마운트돼 있나** — `/Volumes/projects` 가 풀리면 실행 파일을 못 찾는다.
+   자주 쓸 기기라면 소스를 로컬에 두는 편이 낫다.
+4. **서버 자체는 멀쩡한가** — `python tests/check_mcp.py` 로 확인한다.
+   여기서 정상이면 문제는 클라이언트 쪽 등록이다.
+
+> `claude mcp list` 가 `✗ Failed to connect` 로 나오는데 서버는 멀쩡한 경우가 있다.
+> 점검을 돌린 셸의 PATH 에 그 서버가 쓰는 명령(`uv`, `node` 등)이 없으면 그렇게 보인다.
+> 이 서버는 절대 경로로 실행하므로 PATH 영향을 받지 않는다.
+
 ## 도구 세 가지
 
 ### `list_printers`

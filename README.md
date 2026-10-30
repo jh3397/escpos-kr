@@ -43,7 +43,7 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 | `row(left, right, filler)` | 왼쪽 끝과 오른쪽 끝에 붙인다. `filler='·'` 면 사이를 점선으로 채운다 |
 | `line(char)` | 구분선. 용지 폭과 글자 크기에 맞춰 길이가 바뀐다. `─` 같은 괘선 문자도 된다 |
 | `qr(data)` | 내장 QR. 별도 라이브러리가 필요 없다 |
-| `image(path)` | 로고·사진. 경로는 문자열이나 `Path`. 선화는 `dither=False` 가 깨끗하다. 투명 배경은 흰색으로 합성된다 |
+| `image(path)` | 로고·사진. 경로는 문자열이나 `Path`. 선화는 `dither=False` 가 깨끗하다. 투명 배경은 흰색으로 합성된다. `width=160, align="right"` 로 작게·구석에 놓는다 (비우면 용지 폭) |
 | `align` `bold` `underline` `size` `reset` | 꾸밈. 체이닝된다 |
 | `feed` `cut` `beep` `drawer` | 급지, 커팅, 부저, 금전함 |
 | `bytes()` | 보내지 않고 바이트만 — 시험용 |

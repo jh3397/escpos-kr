@@ -165,9 +165,17 @@ class Printer:
         self._dirty = True
         return self
 
-    def image(self, source, dither: bool = True) -> "Printer":
-        """사진·로고. 경로나 PIL 이미지를 받는다."""
-        self._buf += rs.render_image(source, width=self.width, dither=dither)
+    def image(self, source, dither: bool = True,
+              width: int | None = None, align: str | None = None) -> "Printer":
+        """사진·로고. 경로나 PIL 이미지를 받는다.
+
+        width 는 그림의 폭(dot)이고, 비우면 용지 폭을 다 쓴다. 낙관이나 로고는
+        작게 쓰는 것이 보통이라 `width=160` 처럼 준다. align 을 비우면 지금
+        설정된 정렬을 따른다.
+        """
+        self._buf += rs.render_image(
+            source, width=width, dither=dither,
+            align=align or self._align, paper_width=self.width)
         self._dirty = True
         return self
 

@@ -153,10 +153,19 @@ def _flatten_alpha(img):
     return Image.alpha_composite(bg, img)
 
 
-def render_image(source, width: int | None = None, dither: bool = True) -> bytes:
-    """사진이나 로고를 인쇄한다. 경로(str/bytes/Path)나 PIL 이미지를 받는다."""
+def render_image(source, width: int | None = None, dither: bool = True,
+                 align: str = "left", paper_width: int | None = None) -> bytes:
+    """사진이나 로고를 인쇄한다. 경로(str/bytes/Path)나 PIL 이미지를 받는다.
+
+    width 는 **그림 자체의 폭**이고 paper_width 는 용지 폭이다. 둘이 다르면
+    남는 자리를 흰 여백으로 채워 align 위치에 놓는다. 래스터 명령은 늘 왼쪽
+    끝에서 시작하므로, 작은 그림을 가운데나 오른쪽에 두려면 여백째 보내야 한다.
+    """
     Image, _, _ = _pillow()
-    width = width or config.width()
+    paper_width = paper_width or config.width()
+    width = min(width or paper_width, paper_width)
+    if width < 1:
+        raise ValueError("이미지 폭은 1 이상이어야 합니다")
 
     if isinstance(source, (str, bytes, os.PathLike)):
         with Image.open(source) as opened:
@@ -167,10 +176,16 @@ def render_image(source, width: int | None = None, dither: bool = True) -> bytes
     if img.width != width:
         height = max(1, round(img.height * width / img.width))
         img = img.resize((width, height), Image.LANCZOS)
+    img = img.convert("L")
+
+    if width < paper_width:                   # 흰 여백 위에 얹는다
+        canvas = Image.new("L", (paper_width, img.height), 255)
+        canvas.paste(img, (_x_for(align, width, paper_width, 0), 0))
+        img = canvas
 
     # 감열 프린터는 흑백만 찍는다. 그대로 1비트로 떨어뜨리면 사진이 뭉개지므로
     # 기본은 디더링을 쓴다. 로고·선화는 dither=False 가 더 깨끗하다.
-    img = img.convert("L")
+    # 여백을 붙인 뒤에 뒤집어야 여백이 흰색으로 남는다.
     img = img.point(lambda v: 255 - v)        # 검은 바탕 기준으로 뒤집는다
     img = img.convert("1", dither=Image.FLOYDSTEINBERG if dither else Image.NONE)
     return image_to_raster(img)

@@ -572,6 +572,72 @@ def test_non_ascii_filler_uses_raster_not_text():
     assert body.startswith(b"\x1dv0")
 
 
+def _raster_rows(data):
+    """GS v 0 래스터를 (폭바이트, 줄 목록) 으로 푼다."""
+    i = data.index(b"\x1dv0")
+    wb = data[i+4] + data[i+5]*256
+    h = data[i+6] + data[i+7]*256
+    body = data[i+8:i+8+wb*h]
+    return wb, [body[r*wb:(r+1)*wb] for r in range(h)]
+
+
+def _ink_columns(rows, wb):
+    cols = set()
+    for r in rows:
+        for byte_i in range(wb):
+            if r[byte_i]:
+                for bit in range(8):
+                    if r[byte_i] & (0x80 >> bit):
+                        cols.add(byte_i*8 + bit)
+    return cols
+
+
+def test_small_image_stays_inside_the_paper():
+    """작은 그림을 보내도 래스터 폭은 용지 폭이어야 한다.
+
+    폭이 줄어들면 프린터가 줄 길이를 잘못 읽어 그림이 비스듬히 밀린다.
+    """
+    from PIL import Image
+    src = Image.new("L", (100, 100), 0)
+    data = rs.render_image(src, width=160, dither=False, paper_width=576)
+    wb, rows = _raster_rows(data)
+    assert wb == 72, f"폭 바이트가 72 가 아니라 {wb}"
+
+
+def test_image_align_moves_the_ink():
+    """align 이 그림을 실제로 옮겨야 한다. 여백은 희게 남아야 한다."""
+    from PIL import Image
+    src = Image.new("L", (100, 100), 0)          # 새까만 사각형
+    out = {}
+    for how in ("left", "center", "right"):
+        wb, rows = _raster_rows(
+            rs.render_image(src, width=160, dither=False,
+                            align=how, paper_width=576))
+        out[how] = _ink_columns(rows, wb)
+
+    assert min(out["left"]) == 0, "왼쪽 정렬인데 왼쪽 끝이 비었다"
+    assert max(out["right"]) >= 575 - 8, "오른쪽 정렬인데 오른쪽 끝이 비었다"
+    assert min(out["center"]) > min(out["left"]), "가운데가 왼쪽과 같다"
+    assert max(out["center"]) < max(out["right"]), "가운데가 오른쪽과 같다"
+    for how in out:
+        assert len(out[how]) <= 160, f"{how}: 잉크가 그림 폭보다 넓다"
+
+
+def test_image_width_is_clamped_to_the_paper():
+    """용지보다 넓게 달라고 해도 넘치면 안 된다."""
+    from PIL import Image
+    src = Image.new("L", (100, 100), 0)
+    wb, _ = _raster_rows(
+        rs.render_image(src, width=5000, dither=False, paper_width=576))
+    assert wb == 72, f"폭 바이트가 72 가 아니라 {wb}"
+
+
+def test_mcp_block_exposes_image_width():
+    from escpos_kr.mcp_server import Block
+    assert Block(type="image", path="x.png").width == 0      # 0 = 용지 폭
+    assert Block(type="image", path="x.png", width=160).width == 160
+
+
 def test_mcp_block_exposes_dither():
     """로고를 깨끗하게 찍으려면 에이전트가 디더링을 끌 수 있어야 한다."""
     from escpos_kr.mcp_server import Block

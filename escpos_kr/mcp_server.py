@@ -62,6 +62,10 @@ class Block(BaseModel):
         " ", min_length=1, max_length=4,
         description="type=row 에서 항목과 금액 사이를 채울 문자. "
                     "'·' 이나 '.' 을 주면 점선 리더가 된다. 기본은 공백")
+    width: int = Field(
+        0, ge=0, le=1024,
+        description="type=image 의 폭(dot). 0 이면 용지 폭을 다 쓴다. "
+                    "낙관·로고는 120~200 쯤이 보기 좋다. 위치는 align 을 따른다")
     lines: int = Field(1, ge=1, le=20, description="type=feed 의 빈 줄 수")
     align: Literal["left", "center", "right"] | None = Field(
         None, description="정렬. 지정하면 이후 블록에도 이어진다")
@@ -95,7 +99,8 @@ def _compose(p: Printer, blocks: list[Block]) -> None:
         elif b.type == "image":
             if not b.path:
                 raise ValueError("type=image 에는 path 가 필요합니다")
-            p.image(b.path, dither=b.dither)
+            p.image(b.path, dither=b.dither,
+                    width=b.width or None)
 
         if styled:
             p.reset()

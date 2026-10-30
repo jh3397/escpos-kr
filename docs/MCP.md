@@ -60,6 +60,8 @@ stdio 서버를 받는 곳이면 어디든 같은 모양이다.
 USB 로 쓸 거면 `ESCPOS_HOST` 대신 `"ESCPOS_TARGET": "usb"` 를 주거나,
 아무것도 주지 않아도 된다 — USB 가 꽂혀 있으면 자동으로 찾는다.
 용지 폭이 다른 프린터는 `"ESCPOS_WIDTH": "384"` (58mm) 를 함께 준다.
+한글이 번져 보이면 `"ESCPOS_THRESHOLD": "160"` 을 더한다 (획이 얇아진다).
+자세한 것은 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 의 "한글만 번진다".
 이 값은 헤드 폭이 아니라 **실제로 찍히는 폭**이다.
 
 ### 두 가지 전제

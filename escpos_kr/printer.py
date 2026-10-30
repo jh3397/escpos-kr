@@ -36,13 +36,17 @@ class Printer:
                  font_size: int = rs.DEFAULT_SIZE,
                  font_path: str | None = None,
                  width: int | None = None,
-                 columns: int | None = None):
+                 columns: int | None = None,
+                 threshold: int | None = None):
         self._target = target
         self._host = host
         self._transport: Transport | None = (
             target if is_transport(target) else None)
         self.font_size = font_size
         self.font_path = font_path          # None 이면 쓸 때 설정에서 찾는다
+        # 획 두께. None 이면 ESCPOS_THRESHOLD, 없으면 128. 올리면 획이 얇아져
+        # 작은 한글이 서로 붙는 번짐이 줄어든다.
+        self.threshold = threshold
         self.width = width or config.width()
         # 인자 > ESCPOS_COLUMNS > 폭에서 유도. 환경변수는 기종 보정으로
         # 일부러 설정해 둔 값이라 폭에서 유도한 값보다 세야 한다.
@@ -109,7 +113,7 @@ class Printer:
                 self._buf += rs.render_lines(
                     batch, font_size=self.font_size * self._h,
                     bold=self._bold, align=self._align, width=self.width,
-                    font_path=self.font_path)
+                    font_path=self.font_path, threshold=self.threshold)
                 batch.clear()
 
         for line in lines:
@@ -129,7 +133,8 @@ class Printer:
         else:
             self._buf += rs.render_rule(
                 char, font_size=self.font_size * self._h,
-                width=self.width, font_path=self.font_path)
+                width=self.width, font_path=self.font_path,
+                threshold=self.threshold)
         self._dirty = True
         return self
 
@@ -150,7 +155,7 @@ class Printer:
             self._buf += rs.render_row(
                 left, right, font_size=self.font_size * self._h,
                 bold=self._bold, width=self.width, font_path=self.font_path,
-                filler=filler)
+                filler=filler, threshold=self.threshold)
         self._dirty = True
         return self
 

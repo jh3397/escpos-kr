@@ -11,7 +11,10 @@ import os
 from . import config
 from .commands import raster
 
-DEFAULT_SIZE = 28
+# 203dpi 에서 한글 기본 크기. 28 은 3.5mm 라 초성·중성·종성의 획이 서로
+# 붙어 번진다 (실물로 확인). 32 부터 획이 떨어진다. 더 줄이려면 크기 대신
+# ESCPOS_THRESHOLD 를 올려 획을 얇게 하는 쪽이 낫다.
+DEFAULT_SIZE = 32
 
 
 def _pillow():
@@ -45,10 +48,27 @@ def image_to_raster(img) -> bytes:
 
 
 def _new_canvas(width: int, height: int):
-    """검은 바탕 1비트 캔버스. 흰색(1)으로 그린 것이 인쇄된다."""
+    """검은 바탕 8비트 캔버스. 흰색(255)으로 그린 것이 인쇄된다.
+
+    1비트로 바로 그리지 않는 이유는 임계값 때문이다. 폰트는 글자 경계를
+    회색으로 그리는데, 그 회색을 어디서 자르느냐가 곧 획 두께가 된다.
+    1비트 캔버스는 그 선택지를 없애 버린다 (_finish 참고).
+    """
     Image, ImageDraw, _ = _pillow()
-    img = Image.new("1", (width, height), 0)
+    img = Image.new("L", (width, height), 0)
     return img, ImageDraw.Draw(img)
+
+
+def _finish(img, threshold: int | None = None) -> bytes:
+    """회색 캔버스를 임계값으로 잘라 래스터 명령으로 바꾼다.
+
+    임계값을 올리면 경계의 옅은 회색이 떨어져 나가 획이 얇아진다.
+    203dpi 에서 작은 한글의 획이 서로 붙는 번짐을 줄이는 손잡이다.
+    """
+    Image, _, _ = _pillow()
+    t = config.threshold() if threshold is None else max(1, min(255, threshold))
+    img = img.point(lambda v, t=t: 255 if v >= t else 0)
+    return image_to_raster(img.convert("1", dither=Image.NONE))
 
 
 def _x_for(align: str, text_w: int, width: int, pad: int) -> int:
@@ -62,7 +82,7 @@ def _x_for(align: str, text_w: int, width: int, pad: int) -> int:
 def render_lines(lines, font_size: int = DEFAULT_SIZE, bold: bool = False,
                  align: str = "left", width: int | None = None,
                  font_path: str | None = None, line_gap: int = 10,
-                 pad: int = 8) -> bytes:
+                 pad: int = 8, threshold: int | None = None) -> bytes:
     """여러 줄을 한 장의 래스터로 그린다."""
     width = width or config.width()
     if isinstance(lines, str):
@@ -80,16 +100,16 @@ def render_lines(lines, font_size: int = DEFAULT_SIZE, bold: bool = False,
     for i, line in enumerate(lines):
         box = draw.textbbox((0, 0), line, font=font, stroke_width=stroke)
         x = _x_for(align, box[2] - box[0], width, pad)
-        draw.text((x, pad + i * line_h), line, font=font, fill=1,
-                  stroke_width=stroke, stroke_fill=1)
+        draw.text((x, pad + i * line_h), line, font=font, fill=255,
+                  stroke_width=stroke, stroke_fill=255)
 
-    return image_to_raster(img)
+    return _finish(img, threshold)
 
 
 def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
                bold: bool = False, width: int | None = None,
                font_path: str | None = None, pad: int = 8,
-               filler: str = " ") -> bytes:
+               filler: str = " ", threshold: int | None = None) -> bytes:
     """영수증의 '항목 ─ 금액' 한 줄. 왼쪽은 왼쪽 끝, 오른쪽은 오른쪽 끝.
 
     filler 가 공백이 아니면 둘 사이를 그 문자로 채운다 (점선 리더).
@@ -99,12 +119,12 @@ def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
     stroke = 1 if bold else 0
     img, draw = _new_canvas(width, font_size + 14)
 
-    draw.text((pad, 4), left, font=font, fill=1,
-              stroke_width=stroke, stroke_fill=1)
+    draw.text((pad, 4), left, font=font, fill=255,
+              stroke_width=stroke, stroke_fill=255)
     right_w = draw.textlength(right, font=font)
     right_x = width - right_w - pad
-    draw.text((right_x, 4), right, font=font, fill=1,
-              stroke_width=stroke, stroke_fill=1)
+    draw.text((right_x, 4), right, font=font, fill=255,
+              stroke_width=stroke, stroke_fill=255)
 
     if filler.strip():                      # 공백이면 채울 것이 없다
         gap_start = pad + draw.textlength(left, font=font) + font_size * 0.3
@@ -113,8 +133,8 @@ def render_row(left: str, right: str, font_size: int = DEFAULT_SIZE,
         if unit > 0 and gap_end > gap_start:
             count = int((gap_end - gap_start) // unit)
             if count > 0:
-                draw.text((gap_start, 4), filler * count, font=font, fill=1)
-    return image_to_raster(img)
+                draw.text((gap_start, 4), filler * count, font=font, fill=255)
+    return _finish(img, threshold)
 
 
 def _flatten_alpha(img):
@@ -158,7 +178,7 @@ def render_image(source, width: int | None = None, dither: bool = True) -> bytes
 
 def render_rule(char: str, font_size: int = DEFAULT_SIZE,
                 width: int | None = None, font_path: str | None = None,
-                pad: int = 8) -> bytes:
+                pad: int = 8, threshold: int | None = None) -> bytes:
     """ASCII 가 아닌 문자로 구분선을 그린다 (─ 같은 괘선).
 
     내장 폰트로는 보낼 수 없으므로, 폭에 맞는 개수를 재서 이미지로 그린다.
@@ -170,5 +190,5 @@ def render_rule(char: str, font_size: int = DEFAULT_SIZE,
     box = draw.textbbox((0, 0), char, font=font)
     char_w = max(1, box[2] - box[0])
     count = max(1, (width - pad * 2) // char_w)
-    draw.text((pad, 2), char * count, font=font, fill=1)
-    return image_to_raster(img)
+    draw.text((pad, 2), char * count, font=font, fill=255)
+    return _finish(img, threshold)

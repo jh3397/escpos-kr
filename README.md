@@ -63,6 +63,7 @@ with Printer() as p:                        # USB 우선, 없으면 ESCPOS_HOST
 | `ESCPOS_WIDTH` | 576 | **인쇄** 폭(dot). 80mm=576, 58mm=384. 헤드 전체 폭이 아니다 |
 | `ESCPOS_COLUMNS` | 폭÷12 | 한 줄 ASCII 글자 수. 80mm=48, 58mm=32. 폭에서 유도한 값보다 우선한다 |
 | `ESCPOS_FONT` | 자동 탐색 | 한글 폰트 경로 |
+| `ESCPOS_THRESHOLD` | 128 | 획 두께 (1~255). 높이면 얇아져 번짐이 준다 |
 
 폰트는 macOS·Linux·Windows 의 흔한 한글 폰트를 차례로 찾는다.
 못 찾으면 어디를 뒤졌는지 알려주고 멈춘다.

@@ -67,6 +67,19 @@ def test_qr_structure():
     assert b"hello" in q
 
 
+def test_higher_threshold_prints_fewer_dots():
+    """임계값을 올리면 획이 얇아져야 한다.
+
+    이게 뒤집히면 번짐을 줄이려고 올린 값이 오히려 글자를 굵게 만든다.
+    """
+    def dots(threshold):
+        data = rs.render_lines(["성만교회 헌금 영수증"], threshold=threshold)
+        return sum(bin(b).count("1") for b in data)
+
+    thin, thick = dots(200), dots(80)
+    assert thin < thick, f"임계값 200 이 80 보다 점이 많다 ({thin} >= {thick})"
+
+
 def test_raster_bit_polarity():
     """비트 1 이 '찍는 점' 이어야 한다. 뒤집히면 용지가 새까맣게 나온다."""
     blank = rs.image_to_raster(Image.new("1", (16, 2), 0))

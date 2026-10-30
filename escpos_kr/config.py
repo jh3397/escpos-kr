@@ -9,6 +9,8 @@
     ESCPOS_FONT     한글 폰트 파일 경로
     ESCPOS_WIDTH    인쇄 폭 (dot). 80mm=576, 58mm=384. 헤드 전체 폭이 아니다
     ESCPOS_COLUMNS  한 줄 ASCII 글자 수. 비우면 용지 폭에서 계산한다
+    ESCPOS_THRESHOLD 글자를 점으로 떨어뜨리는 밝기 경계 (1~255, 기본 128).
+                    높일수록 획이 얇아진다 — 작은 한글의 번짐을 줄인다
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ DEFAULT_WIDTH = 576          # 80mm. 58mm 프린터는 384
 # 인쇄 폭을 이 값으로 나누면 한 줄 글자 수가 나온다 — 576/12 = 48,
 # 384/12 = 32 로 두 표준 용지 모두 떨어진다. 줄자를 찍어 48자를 확인했다.
 CHAR_WIDTH_DOTS = 12
+DEFAULT_THRESHOLD = 128
 
 # 한글이 들어 있는 폰트를 운영체제별로 훑는다. 먼저 찾은 것을 쓴다.
 FONT_CANDIDATES = (
@@ -78,6 +81,19 @@ def columns(paper_width: int | None = None) -> int:
     if raw:
         return int(raw)
     return columns_for(width() if paper_width is None else paper_width)
+
+
+def threshold() -> int:
+    """글자를 점으로 떨어뜨리는 밝기 경계.
+
+    폰트는 경계가 흐릿하게 그려진다. 그 회색을 어디서 자르느냐가 획 두께다.
+    기본 128 은 절반에서 자른다. 높이면 획이 얇아져, 203dpi 에서 서로
+    붙어 버리는 작은 한글의 번짐이 줄어든다.
+    """
+    raw = os.environ.get("ESCPOS_THRESHOLD")
+    if not raw:
+        return DEFAULT_THRESHOLD
+    return max(1, min(255, int(raw)))
 
 
 def font() -> str:
